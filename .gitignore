@@ -1,0 +1,20 @@
+# --- Security (絶対に入れてはいけない) ---
+.env
+*.env
+api_key.txt
+
+# --- Python ---
+backend/venv/
+backend/__pycache__/
+*.pyc
+backend/.pytest_cache/
+
+# --- Node.js (Frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.eslintcache
+
+# --- OS & IDE ---
+.vscode/
+.DS_Store
+Thumbs.db
