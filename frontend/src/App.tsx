@@ -114,10 +114,18 @@ function App() {
         message: "ようこそ",
         color: "blue",
       });
-    } catch (error) {
+    } catch (error: any) {
+      // 1. サーバーからエラーレスポンスが返ってきた場合 (400, 500など)
+      let errorMessage = "解析中に予期せぬエラーが発生しました。";
+
+      // 2. Axiosのエラーだったらと型を特定する
+      if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || errorMessage;
+        console.error("【Debug】サーバーからの応答:", error.response?.data);
+      }
       notifications.show({
-        title: "ログイン失敗",
-        message: "情報を確認してください",
+        title: "解析エラー",
+        message: errorMessage,
         color: "red",
       });
     }
@@ -128,7 +136,7 @@ function App() {
     localStorage.removeItem("token");
 
     // 2. URLから #dummy を消す
-    window.location.hash="";
+    window.location.hash = "";
 
     // 3. 各種ステートのリセット
     setIsLoggedIn(false);
@@ -195,9 +203,16 @@ function App() {
         color: "green",
       });
     } catch (error) {
+      let errorMessage = "解析中に予期せぬエラーが発生しました。";
+
+      if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.detail || errorMessage;
+        console.error("【Debug】サーバーからの応答:", error.response?.data);
+      }
+
       notifications.show({
         title: "解析エラー",
-        message: "問題が発生しました。",
+        message: errorMessage,
         color: "red",
       });
     } finally {
