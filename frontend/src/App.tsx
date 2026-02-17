@@ -8,6 +8,7 @@ import type { RiskItem } from "./types";
 import { LoginView } from "./components/LoginView";
 import { UploadCard } from "./components/UploadCard";
 import { ResultTable } from "./components/ResultTable";
+import { generatePDF } from "./utils/pdfGenerator";
 
 function App() {
   // --- State管理 ---
@@ -254,7 +255,18 @@ function App() {
           ログアウト
         </Button>
         {/* 結果表示部分をコンポーネント化 */}
-        {analysis.length > 0 && <ResultTable analysis={analysis} />}
+        {analysis.length > 0 && (
+          <Stack gap="md">
+            <Button
+              variant="outline"
+              color="blue"
+              onClick={() => generatePDF(analysis, file?.name || "contract")}
+            >
+              診断レポートをPDFで保存
+            </Button>
+            <ResultTable analysis={analysis} />
+          </Stack>
+        )}
       </Stack>
     </Container>
   );
