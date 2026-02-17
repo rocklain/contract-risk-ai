@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-import { Container, Stack, Title, Button } from "@mantine/core";
+import {
+  Container,
+  Stack,
+  Title,
+  Button,
+  Grid,
+  Paper,
+  ScrollArea,
+  Text,
+  Textarea,
+  Group,
+} from "@mantine/core";
 import axios from "axios";
 import { notifications } from "@mantine/notifications";
 
@@ -21,6 +32,12 @@ function App() {
   const [token, setToken] = useState("");
   const [isDummyMode, setIsDummyMode] = useState(false);
   const hasNotifiedInitial = useRef(false);
+  const [chatInput, setChatInput] = useState("");
+  const [chatHistory, setChatHistory] = useState<
+    { role: string; content: string }[]
+  >([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // --- 起動時チェック、handleLogin, handleLogout, handleAnalyze などのロジック ---
   // (ここは今までのコードのロジック部分をそのまま残す)
@@ -98,6 +115,16 @@ function App() {
 
     // ログイン状態が変わった時に再評価するように追加
   }, [isLoggedIn]);
+
+  // 履歴が更新されたら一番下までスクロールさせる
+  useEffect(() => {
+  if (scrollRef.current) {
+    scrollRef.current.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+}, [chatHistory]);
 
   // --- 3. ログイン・ログアウト処理 ---
   const handleLogin = async () => {
@@ -221,6 +248,37 @@ function App() {
     }
   };
 
+  const handleChat = async () => {
+    if (!chatInput.trim()) return;
+    setChatLoading(true);
+    // 新しいメッセージ履歴を追加
+    const newMessages = [...chatHistory, { role: "user", content: chatInput }];
+    setChatHistory(newMessages);
+
+    setChatInput("");
+
+    try {
+      const response = await axios.post("http://localhost:8000/chat", {
+        analysis_context: analysis, // 1. さきほどの診断結果をコンテキストとして送る
+        user_message: chatInput, // 2. ユーザーの質問を送る
+      });
+
+      // AIからの返答を履歴に追加
+      setChatHistory([
+        ...newMessages,
+        { role: "ai", content: response.data.response },
+      ]);
+    } catch (error) {
+      notifications.show({
+        title: "チャットエラー",
+        message: "AIへの相談に失敗しました",
+        color: "red",
+      });
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   // 1. ログイン画面
   if (!isLoggedIn) {
     return (
@@ -260,11 +318,83 @@ function App() {
             <Button
               variant="outline"
               color="blue"
+              fullWidth={false}
               onClick={() => generatePDF(analysis, file?.name || "contract")}
+              style={{ maxWidth: "250px" }}
             >
               診断レポートをPDFで保存
             </Button>
-            <ResultTable analysis={analysis} />
+
+            <Grid gutter="md">
+              {/* 左側：診断結果（8/12） */}
+              <Grid.Col span={{ base: 12, md: 8 }}>
+                <ResultTable analysis={analysis} />
+              </Grid.Col>
+
+              {/* 右側：AI相談チャット（4/12） */}
+              <Grid.Col span={{ base: 12, md: 4 }}>
+                <Paper
+                  withBorder
+                  p="md"
+                  shadow="xs"
+                  style={{
+                    height: "600px",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <Title order={4} mb="sm">
+                    AI法務相談
+                  </Title>
+
+                  {/* flex: 1 を入れることで、チャット履歴だけが伸び縮みします */}
+                  <ScrollArea style={{ flex: 1 }} mb="md" offsetScrollbars viewportRef={scrollRef}>
+                    <Stack gap="xs">
+                      {chatHistory.map((msg, i) => (
+                        <Paper
+                          key={i}
+                          p="xs"
+                          bg={msg.role === "user" ? "blue.0" : "gray.0"}
+                          withBorder
+                        >
+                          <Text size="xs" fw={700}>
+                            {msg.role === "user" ? "あなた" : "AI弁護士"}
+                          </Text>
+                          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+                            {msg.content}
+                          </Text>
+                        </Paper>
+                      ))}
+                    </Stack>
+                  </ScrollArea>
+
+                  {/* 入力エリアは常に下部に固定されます */}
+                  <Group align="flex-end" gap="xs">
+                    <Textarea
+                      placeholder="送信（Ctrl+Enter）"
+                      style={{ flex: 1 }}
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.currentTarget.value)}
+                      // 自動で高さが伸びる設定
+                      autosize
+                      minRows={1}
+                      maxRows={10} // 10行分くらいまでは自然に伸びるように
+                      // キー操作のカスタマイズ
+                      onKeyDown={(e) => {
+                        // Ctrl または Meta (MacのCmd) キー + Enter が押された時だけ送信
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                          e.preventDefault(); // 改行の挿入を防ぐ
+                          handleChat(); // 送信関数を呼ぶ
+                        }
+                      }}
+                    />
+                    <Button onClick={handleChat} loading={chatLoading}>
+                      送信
+                    </Button>
+                  </Group>
+                </Paper>
+              </Grid.Col>
+            </Grid>
           </Stack>
         )}
       </Stack>

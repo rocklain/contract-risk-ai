@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+
 # Vertex AI 版（移行後）
 from vertexai.generative_models import GenerativeModel
 import vertexai
@@ -12,19 +13,21 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
 # 【重要】CORS設定：フロントエンド（React）からのアクセスを許可する
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # 本番では特定のURLに絞るが、開発時は一旦全て許可
+    allow_origins=["*"],  # 本番では特定のURLに絞るが、開発時は一旦全て許可
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # 1. セキュリティ設定（秘密鍵は本来 .env へ）
-SECRET_KEY = "your-secret-key-for-teatimeninja" # 独自の秘密の文字列
+SECRET_KEY = "your-secret-key-for-teatimeninja"  # 独自の秘密の文字列
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fallback-key-for-dev")
@@ -37,10 +40,7 @@ oauth2_schema = OAuth2PasswordBearer(tokenUrl="token")
 load_dotenv()
 
 # 1. Vertex AI
-vertexai.init(
-  project=os.getenv("GOOGLE_CLOUD_PROJECT"),
-  location="asia-northeast1"
-)
+vertexai.init(project=os.getenv("GOOGLE_CLOUD_PROJECT"), location="asia-northeast1")
 
 # 2.モデルの作成方法をVertexAI流に変更
 from vertexai.generative_models import GenerationConfig
@@ -65,37 +65,42 @@ SAFETY_JUDGE_PROMPT = """
 - 余計な解説は一切不要です。
 """
 
+
 async def detect_prompt_injection(text: str):
-  """
-  セーフティ・ジャッジを実行する
-  """
-  # 警備員AIのテキストを渡し判定を仰ぐ
-  response = await safety_model.generate_content_async(
-    f"{SAFETY_JUDGE_PROMPT}\n\n【判定対象テキスト】\n{text}"
-  )
-  
-  # 結果が'MALICIOUS'を含んでいれば攻撃とみなす
-  result = response.text.strip().upper()
-  return "MALICIOUS" in result
+    """
+    セーフティ・ジャッジを実行する
+    """
+    # 警備員AIのテキストを渡し判定を仰ぐ
+    response = await safety_model.generate_content_async(
+        f"{SAFETY_JUDGE_PROMPT}\n\n【判定対象テキスト】\n{text}"
+    )
+
+    # 結果が'MALICIOUS'を含んでいれば攻撃とみなす
+    result = response.text.strip().upper()
+    return "MALICIOUS" in result
+
 
 # --- ユーティリティ関数 ---
 def create_access_token(data: dict):
-  to_encode = data.copy()
-  expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-  to_encode.update({"exp":expire})
-  return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def get_password_hash(password):
-  return pwd_context.hash(password)
+    return pwd_context.hash(password)
+
 
 # --- エンドポイント ---
 @app.post("/login")
 async def login(data: dict):
-  # 現在は簡易的に固定値でテスト用ユーザーを作成
-  if data.get("username") == "ryoma" and data.get("password") == "teatime":
-    access_token = create_access_token(data={"sub": "ryoma"})
-    return {"access_token": access_token, "token_type": "bearer"}
-  raise HTTPException(status_code=400, detail="ユーザー名かパスワードが違います")
+    # 現在は簡易的に固定値でテスト用ユーザーを作成
+    if data.get("username") == "ryoma" and data.get("password") == "teatime":
+        access_token = create_access_token(data={"sub": "ryoma"})
+        return {"access_token": access_token, "token_type": "bearer"}
+    raise HTTPException(status_code=400, detail="ユーザー名かパスワードが違います")
+
 
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
@@ -107,18 +112,18 @@ async def analyze_contract(file: UploadFile = File(...)):
     text_content = ""
 
     if file.filename.endswith(".pdf"):
-      # メモリ上のバイトデータからPDFを開く
-      pdf_document = fitz.open(stream=io.BytesIO(content), filetype="pdf")
-      for page in pdf_document:
-        text_content += page.get_text()
-      pdf_document.close()
+        # メモリ上のバイトデータからPDFを開く
+        pdf_document = fitz.open(stream=io.BytesIO(content), filetype="pdf")
+        for page in pdf_document:
+            text_content += page.get_text()
+        pdf_document.close()
     else:
-      # テキストファイルの場合はそのままデコード
-      text_content = content.decode("utf-8")
+        # テキストファイルの場合はそのままデコード
+        text_content = content.decode("utf-8")
 
     if await detect_prompt_injection(text_content):
-      print("【警告】プロンプトインジェクションを検知しました！")
-      raise HTTPException(status_code=400, detail="不正な入力を検知しました。")
+        print("【警告】プロンプトインジェクションを検知しました！")
+        raise HTTPException(status_code=400, detail="不正な入力を検知しました。")
 
     # 3. Geminiに投げる指示（プロンプト）を作成
     prompt = f"""
@@ -142,10 +147,54 @@ async def analyze_contract(file: UploadFile = File(...)):
     """
 
     # 4. Gemini APIを叩く
-    response = model.generate_content(
-      prompt,
-      generation_config=config
-      )
-    
+    response = model.generate_content(prompt, generation_config=config)
+
     # 5. 結果をフロントエンドに返す
     return {"analysis": response.text}
+
+
+class ChatRequest(BaseModel):
+    analysis_context: List[dict]
+    user_message: str
+
+
+# チャット用エンドポイント
+@app.post("/chat")
+async def chat_with_ai(request: ChatRequest):
+    # 診断結果をテキストに変換してコンテキストを作る
+    context_text = "\n".join(
+        [
+            f"- 項目: {item['title']}\n リスク: {item['description']}\n 対策: {item['action']}"
+            for item in request.analysis_context
+        ]
+    )
+    # Few-Shot プロンプトの組み立て
+    prompt = f"""
+あなたは法務のスペシャリストです。以下の「診断結果」の内容を踏まえ、ユーザーの質問に具体的かつ建設的な回答をしてください。
+
+### 診断結果
+{context_text}
+
+### 回答の指針（Few-Shot）
+例1
+ユーザー: 「損害賠償の条項をもっと自社に有利にしたい」
+AI: 「現在の条項は賠償額が無制限となっており、経営上のリスクが非常に高いです。
+具体的には、『損害賠償の累計額は、本契約に基づき過去12ヶ月間に実際に支払われた対価の総額を上限とする』という一文を第○条に加えることを提案します。
+これにより、万が一の際も支払い額を既知の範囲内に抑えることが可能です。」
+
+例2
+ユーザー: 「自動更新を止めたい」
+AI: 「第○条の更新規定を修正しましょう。
+『期間満了の3ヶ月前までに書面による更新拒絶の通知がない限り自動更新される』という箇所を、
+『本契約は期間満了をもって終了し、更新が必要な場合は別途書面にて合意する』に変更することで、意図しない契約継続を防げます。」
+
+### ユーザーの質問
+{request.user_message}
+
+AIの回答:
+"""
+
+    model = GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(prompt)
+
+    return {"response": response.text}
