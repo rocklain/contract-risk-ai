@@ -10,6 +10,7 @@ import {
   Text,
   Textarea,
   Group,
+  Drawer,
 } from "@mantine/core";
 import axios from "axios";
 import { notifications } from "@mantine/notifications";
@@ -39,6 +40,9 @@ function App() {
   >([]);
   const [chatLoading, setChatLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [history, setHistory] = useState<any[]>([]); // 履歴データ用
+  const [drawerOpened, setDrawerOpened] = useState(false); // サイドバー開閉
 
   // --- 起動時チェック、handleLogin, handleLogout, handleAnalyze などのロジック ---
   // (ここは今までのコードのロジック部分をそのまま残す)
@@ -280,6 +284,35 @@ function App() {
     }
   };
 
+  // --- 履歴取得ロジック ---
+  const fetchHistory = async () => {
+    try {
+      const response = await axios.get("http://localhost:8000/history");
+      setHistory(response.data);
+      setDrawerOpened(true); // 取得出来たらサイドバーを開く
+    } catch (error) {
+      notifications.show({
+        title: "履歴取得エラー",
+        message: "過去のデータを読み込めませんでした",
+        color: "red",
+      });
+    }
+  };
+
+  // --- 履歴から復元するロジック ---
+  const handleSelectHistory = (item: any) => {
+    // DB には文字列で保存されているので、JSON.parse でオブジェクトに戻す
+    const parsedResult = JSON.parse(item.result_json);
+    setAnalysis(parsedResult);
+    setFile({ name: item.filename } as File); // ファイル名だけダミーでセット
+    setDrawerOpened(false); // サイドバーを閉じる
+    notifications.show({
+      title: "復元完了",
+      message: `${item.filename}の診断結果を表示しました`,
+      color: "blue",
+    });
+  };
+
   // 1. ログイン画面
   if (!isLoggedIn) {
     return (
@@ -295,7 +328,14 @@ function App() {
 
   // 2. メイン画面
   return (
-    <Container size="md" py="xl">
+    <Container size="xl" py="xl">
+      {/* 右上に履歴ボタンを配置 */}
+      <Group justify="flex-end" mb="md">
+        <Button variant="light" color="gray" onClick={fetchHistory}>
+          過去の診断履歴
+        </Button>
+      </Group>
+
       <Stack gap="xl">
         <Title order={1} ta="center" c={isDummyMode ? "orange.6" : "blue.8"}>
           {isDummyMode
@@ -404,6 +444,42 @@ function App() {
           </Stack>
         )}
       </Stack>
+      {/* --- 履歴表示用のサイドバー --- */}
+      <Drawer
+        opened={drawerOpened}
+        onClose={() => setDrawerOpened(false)}
+        title="診断履歴一覧"
+        position="right"
+        size="md"
+      >
+        <ScrollArea h="calc(100vh - 80px)">
+          {history.length === 0 ? (
+            <Text c="dimmed" ta="center" mt="xl">
+              履歴はまだありません
+            </Text>
+          ) : (
+            <Stack gap="sm">
+              {history.map((item) => (
+                <Paper
+                  key={item.id}
+                  withBorder
+                  p="md"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => handleSelectHistory(item)}
+                  className="history-item"
+                >
+                  <Text fw={700} size="sm" truncate>
+                    {item.filename}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {new Date(item.created_at).toLocaleString("ja-JP")}
+                  </Text>
+                </Paper>
+              ))}
+            </Stack>
+          )}
+        </ScrollArea>
+      </Drawer>
     </Container>
   );
 }
