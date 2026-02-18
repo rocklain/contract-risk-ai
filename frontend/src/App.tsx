@@ -11,6 +11,7 @@ import {
   Textarea,
   Group,
   Drawer,
+  ActionIcon,
 } from "@mantine/core";
 import axios from "axios";
 import { notifications } from "@mantine/notifications";
@@ -313,6 +314,27 @@ function App() {
     });
   };
 
+  const deleteHistory = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm("この履歴を削除してもよろしいですか？")) return;
+    try {
+      await axios.delete(`http://localhost:8000/history/${id}`);
+      // 画面上のリストからも消す（再取得しなくていいように、今のリストをフィルタリングする）
+      setHistory(history.filter((item) => item.id !== id));
+      notifications.show({
+        title: "削除完了",
+        message: "履歴を削除しました",
+        color: "gray",
+      });
+    } catch (error) {
+      notifications.show({
+        title: "削除エラー",
+        message: "削除に失敗しました",
+        color: "red",
+      });
+    }
+  };
+
   // 1. ログイン画面
   if (!isLoggedIn) {
     return (
@@ -466,14 +488,26 @@ function App() {
                   p="md"
                   style={{ cursor: "pointer" }}
                   onClick={() => handleSelectHistory(item)}
-                  className="history-item"
                 >
-                  <Text fw={700} size="sm" truncate>
-                    {item.filename}
-                  </Text>
-                  <Text size="xs" c="dimmed">
-                    {new Date(item.created_at).toLocaleString("ja-JP")}
-                  </Text>
+                  <Group justify="space-between" wrap="nowrap">
+                    <Stack gap={0} style={{ flex: 1 }}>
+                      <Text fw={700} size="sm" truncate>
+                        {item.filename}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {new Date(item.created_at).toLocaleString("ja-JP")}
+                      </Text>
+                    </Stack>
+
+                    {/* 削除ボタン */}
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      onClick={(e) => deleteHistory(item.id, e)}
+                    >
+                      × {/* ここにゴミ箱アイコンを入れるとリッチになります */}
+                    </ActionIcon>
+                  </Group>
                 </Paper>
               ))}
             </Stack>

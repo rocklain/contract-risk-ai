@@ -232,3 +232,19 @@ async def get_history():
         # 担当者に命令を渡し実行結果を全て受け取る
         results = session.exec(statement).all()
         return results
+
+
+@app.delete("/history/{history_id}")
+async def delete_history(history_id: int):
+    with Session(engine) as session:
+        # 削除したい特定のIDを探す
+        item = session.get(AnalysisHistory, history_id)
+        if not item:
+            raise HTTPException(
+                status_code=404, detail="指定された履歴が見つかりません"
+            )
+
+        session.delete(item)
+        session.commit()
+
+        return {"message": "削除しました"}
