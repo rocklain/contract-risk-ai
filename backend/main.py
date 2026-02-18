@@ -15,10 +15,20 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import List
+from models import create_db_and_tables, engine, AnalysisHistory
+from contextlib import asynccontextmanager
+from sqlmodel import Session, select
 
-app = FastAPI()
 
-# 【重要】CORS設定：フロントエンド（React）からのアクセスを許可する
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # アプリ起動時に実行（DBテーブル作成）
+    create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+# CORS設定：フロントエンド（React）からのアクセスを許可する
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 本番では特定のURLに絞るが、開発時は一旦全て許可
@@ -148,9 +158,22 @@ async def analyze_contract(file: UploadFile = File(...)):
 
     # 4. Gemini APIを叩く
     response = model.generate_content(prompt, generation_config=config)
+    raw_text = response.text
+    cleaned_data = raw_text.replace("```json", "").replace("```", "").strip()
 
-    # 5. 結果をフロントエンドに返す
-    return {"analysis": response.text}
+    # 5. DB保存
+    with Session(engine) as session:
+        new_history = AnalysisHistory(
+            user_id=1,
+            filename=file.filename,
+            result_json=cleaned_data,  # 綺麗なJSON文字列を保存
+        )
+        session.add(new_history)
+        session.commit()
+        # session.refresh(new_history) # 必要に応じて
+
+    # 6. 結果をフロントエンドに返す
+    return {"analysis": cleaned_data}
 
 
 class ChatRequest(BaseModel):
@@ -198,3 +221,14 @@ AIの回答:
     response = model.generate_content(prompt)
 
     return {"response": response.text}
+
+
+@app.get("/history")
+async def get_history():
+    # 窓口を開く
+    with Session(engine) as session:
+        # 「履歴テーブルから全部取ってきて」という命令（SQL）を作る
+        statement = select(AnalysisHistory)
+        # 担当者に命令を渡し実行結果を全て受け取る
+        results = session.exec(statement).all()
+        return results
