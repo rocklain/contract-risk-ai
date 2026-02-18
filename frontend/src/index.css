@@ -66,3 +66,18 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* index.css などに追加 */
+.prose-legal pre {
+  background-color: #f1f3f5;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.prose-legal code {
+  background-color: #f1f3f5;
+  padding: 2px 4px;
+  border-radius: 4px;
+}

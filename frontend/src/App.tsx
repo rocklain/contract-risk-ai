@@ -20,6 +20,7 @@ import { LoginView } from "./components/LoginView";
 import { UploadCard } from "./components/UploadCard";
 import { ResultTable } from "./components/ResultTable";
 import { generatePDF } from "./utils/pdfGenerator";
+import ReactMarkdown from "react-markdown";
 
 function App() {
   // --- State管理 ---
@@ -118,13 +119,13 @@ function App() {
 
   // 履歴が更新されたら一番下までスクロールさせる
   useEffect(() => {
-  if (scrollRef.current) {
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }
-}, [chatHistory]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, [chatHistory]);
 
   // --- 3. ログイン・ログアウト処理 ---
   const handleLogin = async () => {
@@ -348,7 +349,12 @@ function App() {
                   </Title>
 
                   {/* flex: 1 を入れることで、チャット履歴だけが伸び縮みします */}
-                  <ScrollArea style={{ flex: 1 }} mb="md" offsetScrollbars viewportRef={scrollRef}>
+                  <ScrollArea
+                    style={{ flex: 1 }}
+                    mb="md"
+                    offsetScrollbars
+                    viewportRef={scrollRef}
+                  >
                     <Stack gap="xs">
                       {chatHistory.map((msg, i) => (
                         <Paper
@@ -360,9 +366,9 @@ function App() {
                           <Text size="xs" fw={700}>
                             {msg.role === "user" ? "あなた" : "AI弁護士"}
                           </Text>
-                          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
-                            {msg.content}
-                          </Text>
+                          <div style={{ fontSize: "14px", lineHeight: "1.6" }}>
+                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          </div>
                         </Paper>
                       ))}
                     </Stack>
